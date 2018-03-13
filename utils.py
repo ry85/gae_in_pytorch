@@ -2,6 +2,7 @@ import pickle as pkl
 import numpy as np
 import scipy.sparse as sp
 import torch
+import sys
 import networkx as nx
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
 import matplotlib.pyplot as plt
@@ -75,8 +76,11 @@ def load_data(dataset):
     names = ['x', 'tx', 'allx', 'graph']
     objects = []
     for i in range(len(names)):
-        objects.append(
-            pkl.load(open("data/ind.{}.{}".format(dataset, names[i]))))
+        with open("data/ind.{}.{}".format(dataset, names[i]), 'rb') as f:
+            if sys.version_info > (3, 0):
+                objects.append(pkl.load(f, encoding='latin1'))
+            else:
+                objects.append(pkl.load(f))
     x, tx, allx, graph = tuple(objects)
     test_idx_reorder = parse_index_file(
         "data/ind.{}.test.index".format(dataset))

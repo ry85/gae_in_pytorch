@@ -1,3 +1,6 @@
+from __future__ import print_function
+from __future__ import division
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -45,11 +48,11 @@ class InnerProductDecoder(nn.Module):
         return adj
     
 
-class GAE(object):
-    """Graph Auto Encoder (see: https://arxqiv.org/abs/1611.07308)"""
+class GVAE(object):
+    """Graph Auto Encoder (see: https://arxiv.org/abs/1611.07308) - """
 
     def __init__(self, data, n_hidden, n_latent, dropout, subsampling=False):
-        super(GAE, self).__init__()
+        super(GVAE, self).__init__()
         
         # Data
         self.x = data['features']
@@ -76,7 +79,7 @@ class GAE(object):
         self.decoder = InnerProductDecoder(self.dropout)
 
         if self.subsampling:
-            print "Using subsampling instead of reweighting"
+            print("Using subsampling instead of reweighting")
             self.sample = get_subsampler(self.adj_labels)
         
         

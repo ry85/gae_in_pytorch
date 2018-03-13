@@ -13,7 +13,7 @@ from pyro.infer import SVI
 from pyro.optim import Adam
 
 from utils import load_data, dotdict, eval_gae, make_sparse, plot_results
-from models import GAE
+from models import GVAE
 from preprocessing import mask_test_edges, preprocess_graph
 
 def main(args):
@@ -42,7 +42,7 @@ def main(args):
         'features'  : features,
     }
 
-    gae = GAE(data,
+    gae = GVAE(data,
               n_hidden=32,
               n_latent=16,
               dropout=args.dropout,
@@ -108,8 +108,8 @@ if __name__ == '__main__':
     args.seed        = 2
     args.dropout     = 0.5
     args.num_epochs  = 200
-    args.dataset_str = 'cora'
-    # args.dataset_str = 'citeseer'
+    #args.dataset_str = 'cora'
+    args.dataset_str = 'citeseer'
     args.test_freq   = 10
     args.lr          = 0.01
     args.subsampling = False
