@@ -49,7 +49,7 @@ class InnerProductDecoder(nn.Module):
     
 
 class GVAE(object):
-    """Graph Auto Encoder (see: https://arxiv.org/abs/1611.07308) - """
+    """Graph Auto Encoder (see: https://arxiv.org/abs/1611.07308) - Variational Version"""
 
     def __init__(self, data, n_hidden, n_latent, dropout, subsampling=False):
         super(GVAE, self).__init__()
@@ -117,3 +117,50 @@ class GVAE(object):
         # Put encoder back into training mode 
         self.encoder.train()
         return z_mu
+
+class GAE(nn.Module):
+    """Graph Auto Encoder (see: https://arxiv.org/abs/1611.07308) - Probabilistic Version"""
+
+    def __init__(self, data, n_hidden, n_latent, dropout, subsampling=False):
+        super(GAE, self).__init__()
+
+        # Data
+        self.x = data['features']
+        self.adj_norm = data['adj_norm']
+        self.adj_labels = data['adj_labels']    
+
+        # Dimensions
+        N, D = data['features'].shape
+        self.n_samples = N
+        self.n_edges = self.adj_labels.sum()
+        self.n_subsample = 2 * self.n_edges
+        self.input_dim = D
+        self.n_hidden = n_hidden
+        self.n_latent = n_latent
+
+        # Parameters
+        self.pos_weight = float(N * N - self.n_edges) / self.n_edges
+        self.norm = float(N * N) / ((N * N - self.n_edges) * 2)
+        self.subsampling = subsampling
+
+        self.gc1 = GraphConvolution(self.input_dim, self.n_hidden)
+        self.dropout = dropout
+
+        self.sigmoid = nn.Sigmoid()
+        self.fudge = 1e-7
+
+
+    def forward(self, x, adj):
+
+        # Perform the encoding stage using a GCN
+        x = F.relu(self.gc1(x, adj))
+        x = F.dropout(x, self.dropout, training=self.training)
+
+        adj_hat = (self.sigmoid(torch.mm(x, x.t())) + self.fudge) * (1 - 2 * self.fudge)
+
+        return adj_hat
+
+    def get_embeddings(self, x, adj):
+
+        return F.relu(self.gc1(x, adj))
+
