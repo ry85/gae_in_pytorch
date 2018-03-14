@@ -144,23 +144,31 @@ class GAE(nn.Module):
         self.subsampling = subsampling
 
         self.gc1 = GraphConvolution(self.input_dim, self.n_hidden)
+        self.gc2 = GraphConvolution(self.n_hidden, self.n_latent)
         self.dropout = dropout
 
         self.sigmoid = nn.Sigmoid()
         self.fudge = 1e-7
 
+    def encode_graph(self, x, adj):
+
+        # Perform the encoding stage using a two layer GCN
+        x = F.relu(self.gc1(x, adj))
+        x = F.dropout(x, self.dropout, training=self.training)
+        x = self.gc2(x, adj)
+
+        return x
 
     def forward(self, x, adj):
 
-        # Perform the encoding stage using a GCN
-        x = F.relu(self.gc1(x, adj))
-        x = F.dropout(x, self.dropout, training=self.training)
-
+        # Encoder
+        x = self.encode_graph(x, adj)
+        # Decoder
         adj_hat = (self.sigmoid(torch.mm(x, x.t())) + self.fudge) * (1 - 2 * self.fudge)
 
         return adj_hat
 
     def get_embeddings(self, x, adj):
 
-        return F.relu(self.gc1(x, adj))
+        return self.encode_graph(x, adj)
 
