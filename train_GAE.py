@@ -8,6 +8,7 @@ import time
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 
@@ -48,18 +49,14 @@ def main(args):
               dropout=args.dropout,
               subsampling=args.subsampling)
 
-    # if cuda move onto GPU
+    # If cuda move onto GPU
     if args.cuda:
         gae.cuda()
-        features = features.cuda()
         data['adj_norm'] = data['adj_norm'].cuda()
         data['adj_labels'] = data['adj_labels'].cuda()
         data['features'] = data['features'].cuda()
 
-
     optimizer = optim.Adam(gae.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    
-    #svi = SVI(gae.model, gae.guide, optimizer, loss="ELBO")
     
     # Results
     results = defaultdict(list)
@@ -74,72 +71,67 @@ def main(args):
         # forward pass
         output = gae(data['features'], data['adj_norm'])
 
+        # Compute the loss 
+        #loss = gae.norm.cuda() * torch.mean(gae.pos_weight.cuda() * criterion(output, data['adj_labels']))
+        # currently no proper weighted cross entropy loss in pytorch
+        # https://github.com/pytorch/pytorch/issues/5660
+        logits = F.sigmoid(output)
+        targets = data['adj_labels']
+        max_val = (-logits).clamp(min=0)
+        log_weight = 1 + (gae.pos_weight.cuda() - 1) * targets
+        loss = (1 - targets) * logits + log_weight * ((-logits.abs()).exp().log1p() + max_val)
+        loss = gae.norm.cuda() * torch.mean(loss)
+        
         loss.backward()
         optimizer.step()
-        #print(output)
 
-        print(gae.get_embeddings(data['features'], data['adj_norm']))
+        results['train_elbo'].append(loss.data[0])
 
-    #     # initialize loss accumulator
-    #     epoch_loss = 0.
-    #     # do ELBO gradient and accumulate loss
-    #     epoch_loss += svi.step()
-    #     # report training diagnostics
-    #     if args.subsampling:
-    #         normalized_loss = epoch_loss / float(2 * n_edges)
-    #     else:
-    #         normalized_loss = epoch_loss / (2 * N * N)
-
-    #     # loss function
-    #     #loss = gae.norm * torch.mean()
+        emb = gae.get_embeddings(data['features'], data['adj_norm']).cpu()
+        accuracy, roc_curr, ap_curr, = eval_gae(val_edges, val_edges_false, emb, adj_orig)
+        results['accuracy_train'].append(accuracy)
+        results['roc_train'].append(roc_curr)
+        results['ap_train'].append(ap_curr)
         
-    #     results['train_elbo'].append(normalized_loss)
+        print("Epoch:", '%04d' % (epoch + 1),
+              "train_loss=", "{:.5f}".format(loss.data[0]),
+              "train_acc=", "{:.5f}".format(accuracy), "val_roc=", "{:.5f}".format(roc_curr), "val_ap=", "{:.5f}".format(ap_curr))
 
-    #     # Training loss
-    #     emb = gae.get_embeddings(features, adj)
-    #     accuracy, roc_curr, ap_curr, = eval_gae(val_edges, val_edges_false, emb, adj_orig)
-        
-    #     results['accuracy_train'].append(accuracy)
-    #     results['roc_train'].append(roc_curr)
-    #     results['ap_train'].append(ap_curr)
-        
-    #     print("Epoch:", '%04d' % (epoch + 1),
-    #           "train_loss=", "{:.5f}".format(normalized_loss),
-    #           "train_acc=", "{:.5f}".format(accuracy), "val_roc=", "{:.5f}".format(roc_curr), "val_ap=", "{:.5f}".format(ap_curr))
-
-    #     # Test loss
-    #     if epoch % args.test_freq == 0:
-    #         emb = gae.get_embeddings()
-    #         accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
-    #         results['accuracy_test'].append(accuracy)
-    #         results['roc_test'].append(roc_curr)
-    #         results['ap_test'].append(ap_curr)
+        # Test loss
+        if epoch % args.test_freq == 0:
+            gae.eval()
+            emb = gae.get_embeddings(data['features'], data['adj_norm']).cpu()
+            accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
+            results['accuracy_test'].append(accuracy)
+            results['roc_test'].append(roc_curr)
+            results['ap_test'].append(ap_curr)
+            gae.train()
     
+    print("Optimization Finished!")
 
-    # print("Optimization Finished!")
-
-    # # Test loss
-    # emb = gae.get_embeddings()
-    # accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
-    # print('Test Accuracy: ' + str(accuracy))
-    # print('Test ROC score: ' + str(roc_score))
-    # print('Test AP score: ' + str(ap_score))
+    # Test loss
+    gae.eval()
+    emb =  emb = gae.get_embeddings(data['features'], data['adj_norm']).cpu()
+    accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
+    print('Test Accuracy: ' + str(accuracy))
+    print('Test ROC score: ' + str(roc_score))
+    print('Test AP score: ' + str(ap_score))
     
-    # # Plot
-    # plot_results(results, args.test_freq, path= args.dataset_str + "_results.png")
+    # Plot
+    plot_results(results, args.test_freq, path= args.dataset_str + "_GAE_results.png")
 
 if __name__ == '__main__':
 
     args = dotdict()
     args.seed        = 2
-    args.dropout     = 0.5
+    args.dropout     = 0.4
     args.num_epochs  = 200
     #args.dataset_str = 'cora'
     args.dataset_str = 'citeseer'
     args.test_freq   = 10
     args.lr          = 0.01
     args.subsampling = False
-    args.weight_decay = 0.0
+    args.weight_decay = 0.00001
     args.cuda = True
 
     np.random.seed(args.seed)
