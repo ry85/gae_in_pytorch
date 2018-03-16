@@ -100,7 +100,7 @@ def main(args):
     print('Test AP score: ' + str(ap_score))
     
     # Plot
-    plot_results(results, args.test_freq, path= args.dataset_str + "_results.png")
+    plot_results(results, args.test_freq, path= args.dataset_str + "_GVAE_results.png")
 
 if __name__ == '__main__':
 
@@ -108,8 +108,8 @@ if __name__ == '__main__':
     args.seed        = 2
     args.dropout     = 0.5
     args.num_epochs  = 200
-    #args.dataset_str = 'cora'
-    args.dataset_str = 'citeseer'
+    args.dataset_str = 'cora'
+    #args.dataset_str = 'citeseer'
     args.test_freq   = 10
     args.lr          = 0.01
     args.subsampling = False

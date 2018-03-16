@@ -46,8 +46,7 @@ def main(args):
     gae = GAE(data,
               n_hidden=32,
               n_latent=16,
-              dropout=args.dropout,
-              subsampling=args.subsampling)
+              dropout=args.dropout)
 
     # If cuda move onto GPU
     if args.cuda:
@@ -56,7 +55,7 @@ def main(args):
         data['adj_labels'] = data['adj_labels'].cuda()
         data['features'] = data['features'].cuda()
 
-    optimizer = optim.Adam(gae.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam(gae.parameters(), lr=args.lr, betas=(0.95, 0.999), weight_decay=args.weight_decay)
     
     # Results
     results = defaultdict(list)
@@ -87,7 +86,8 @@ def main(args):
 
         results['train_elbo'].append(loss.data[0])
 
-        emb = gae.get_embeddings(data['features'], data['adj_norm']).cpu()
+        gae.eval()
+        emb = gae.get_embeddings(data['features'], data['adj_norm'])
         accuracy, roc_curr, ap_curr, = eval_gae(val_edges, val_edges_false, emb, adj_orig)
         results['accuracy_train'].append(accuracy)
         results['roc_train'].append(roc_curr)
@@ -100,7 +100,7 @@ def main(args):
         # Test loss
         if epoch % args.test_freq == 0:
             gae.eval()
-            emb = gae.get_embeddings(data['features'], data['adj_norm']).cpu()
+            emb = gae.get_embeddings(data['features'], data['adj_norm'])
             accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
             results['accuracy_test'].append(accuracy)
             results['roc_test'].append(roc_curr)
@@ -111,7 +111,7 @@ def main(args):
 
     # Test loss
     gae.eval()
-    emb =  emb = gae.get_embeddings(data['features'], data['adj_norm']).cpu()
+    emb =  emb = gae.get_embeddings(data['features'], data['adj_norm'])
     accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
     print('Test Accuracy: ' + str(accuracy))
     print('Test ROC score: ' + str(roc_score))
@@ -124,14 +124,14 @@ if __name__ == '__main__':
 
     args = dotdict()
     args.seed        = 2
-    args.dropout     = 0.4
+    args.dropout     = 0.5
     args.num_epochs  = 200
-    #args.dataset_str = 'cora'
-    args.dataset_str = 'citeseer'
+    args.dataset_str = 'cora'
+    #args.dataset_str = 'citeseer'
     args.test_freq   = 10
     args.lr          = 0.01
     args.subsampling = False
-    args.weight_decay = 0.00001
+    args.weight_decay = 0.0
     args.cuda = True
 
     np.random.seed(args.seed)

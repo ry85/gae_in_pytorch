@@ -121,7 +121,7 @@ class GVAE(object):
 class GAE(nn.Module):
     """Graph Auto Encoder (see: https://arxiv.org/abs/1611.07308) - Probabilistic Version"""
 
-    def __init__(self, data, n_hidden, n_latent, dropout, subsampling=False):
+    def __init__(self, data, n_hidden, n_latent, dropout):
         super(GAE, self).__init__()
 
         # Data
@@ -141,7 +141,6 @@ class GAE(nn.Module):
         # Parameters
         self.pos_weight = float(N * N - self.n_edges) / self.n_edges
         self.norm = float(N * N) / ((N * N - self.n_edges) * 2)
-        self.subsampling = subsampling
 
         self.gc1 = GraphConvolution(self.input_dim, self.n_hidden)
         self.gc2 = GraphConvolution(self.n_hidden, self.n_latent)
@@ -164,6 +163,7 @@ class GAE(nn.Module):
         # Encoder
         x = self.encode_graph(x, adj)
         # Decoder
+        x = F.dropout(x, self.dropout, training=self.training)
         adj_hat = (self.sigmoid(torch.mm(x, x.t())) + self.fudge) * (1 - 2 * self.fudge)
 
         return adj_hat

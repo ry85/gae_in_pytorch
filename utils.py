@@ -2,6 +2,7 @@ import pickle as pkl
 import numpy as np
 import scipy.sparse as sp
 import torch
+import torch.nn as nn
 import sys
 import networkx as nx
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
@@ -24,24 +25,22 @@ class dotdict(dict):
 
 def eval_gae(edges_pos, edges_neg, emb, adj_orig):
 
-    def sigmoid(x):
-        return 1 / (1 + np.exp(-x))
-
     # Predict on test set of edges
-    emb = emb.data.numpy()
-    adj_rec = np.dot(emb, emb.T)
+    adj_rec = torch.sigmoid(torch.mm(emb, emb.t()))
+    adj_rec = adj_rec.cpu()
+    adj_rec = adj_rec.data.numpy()
     preds = []
     pos = []
 
     for e in edges_pos:
-        preds.append(sigmoid(adj_rec[e[0], e[1]]))
+        preds.append(adj_rec[e[0], e[1]])
         pos.append(adj_orig[e[0], e[1]])
 
     preds_neg = []
     neg = []
 
     for e in edges_neg:
-        preds_neg.append(sigmoid(adj_rec[e[0], e[1]]))
+        preds_neg.append(adj_rec[e[0], e[1]])
         neg.append(adj_orig[e[0], e[1]])
 
     preds_all = np.hstack([preds, preds_neg])
@@ -126,8 +125,8 @@ def plot_results(results, test_freq, path='results.png'):
     # Elbo
     ax = fig.add_subplot(2, 2, 1)
     ax.plot(x_axis_train, results['train_elbo'])
-    ax.set_ylabel('Loss (ELBO)')
-    ax.set_title('Loss (ELBO)')
+    ax.set_ylabel('Loss')
+    ax.set_title('Loss')
     ax.legend(['Train'], loc='upper right')
 
     # Accuracy
