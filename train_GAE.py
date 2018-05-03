@@ -19,6 +19,9 @@ from preprocessing import mask_test_edges, preprocess_graph
 def main(args):
     """ Train GAE """ 
 
+    # Compute the device upon which to run
+    device = torch.device("cuda" if args.use_cuda else "cpu")
+
     print("Using {} dataset".format(args.dataset_str))
     # Load data
     np.random.seed(1)
@@ -48,12 +51,11 @@ def main(args):
               n_latent=16,
               dropout=args.dropout)
 
-    # If cuda move onto GPU
-    if args.cuda:
-        gae.cuda()
-        data['adj_norm'] = data['adj_norm'].cuda()
-        data['adj_labels'] = data['adj_labels'].cuda()
-        data['features'] = data['features'].cuda()
+    # Send the model and data to the available device
+    gae.to(device)
+    data['adj_norm'] = data['adj_norm'].to(device)
+    data['adj_labels'] = data['adj_labels'].to(device)
+    data['features'] = data['features'].to(device)
 
     optimizer = optim.Adam(gae.parameters(), lr=args.lr, betas=(0.95, 0.999), weight_decay=args.weight_decay)
     
@@ -71,20 +73,21 @@ def main(args):
         output = gae(data['features'], data['adj_norm'])
 
         # Compute the loss 
-        #loss = gae.norm.cuda() * torch.mean(gae.pos_weight.cuda() * criterion(output, data['adj_labels']))
+        #loss = gae.norm.cuda() * torch.mean(gae.pos_weight.
+        # () * criterion(output, data['adj_labels']))
         # currently no proper weighted cross entropy loss in pytorch
         # https://github.com/pytorch/pytorch/issues/5660
         logits = F.sigmoid(output)
         targets = data['adj_labels']
         max_val = (-logits).clamp(min=0)
-        log_weight = 1 + (gae.pos_weight.cuda() - 1) * targets
+        log_weight = 1 + (gae.pos_weight - 1.) * targets
         loss = (1 - targets) * logits + log_weight * ((-logits.abs()).exp().log1p() + max_val)
-        loss = gae.norm.cuda() * torch.mean(loss)
+        loss = gae.norm * torch.mean(loss)
         
         loss.backward()
         optimizer.step()
 
-        results['train_elbo'].append(loss.data[0])
+        results['train_elbo'].append(loss.item())
 
         gae.eval()
         emb = gae.get_embeddings(data['features'], data['adj_norm'])
@@ -94,28 +97,30 @@ def main(args):
         results['ap_train'].append(ap_curr)
         
         print("Epoch:", '%04d' % (epoch + 1),
-              "train_loss=", "{:.5f}".format(loss.data[0]),
+              "train_loss=", "{:.5f}".format(loss.item()),
               "train_acc=", "{:.5f}".format(accuracy), "val_roc=", "{:.5f}".format(roc_curr), "val_ap=", "{:.5f}".format(ap_curr))
 
         # Test loss
         if epoch % args.test_freq == 0:
-            gae.eval()
-            emb = gae.get_embeddings(data['features'], data['adj_norm'])
-            accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
-            results['accuracy_test'].append(accuracy)
-            results['roc_test'].append(roc_curr)
-            results['ap_test'].append(ap_curr)
+            with torch.no_grad():
+                gae.eval()
+                emb = gae.get_embeddings(data['features'], data['adj_norm'])
+                accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
+                results['accuracy_test'].append(accuracy)
+                results['roc_test'].append(roc_curr)
+                results['ap_test'].append(ap_curr)
             gae.train()
     
     print("Optimization Finished!")
-
-    # Test loss
-    gae.eval()
-    emb =  emb = gae.get_embeddings(data['features'], data['adj_norm'])
-    accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
-    print('Test Accuracy: ' + str(accuracy))
-    print('Test ROC score: ' + str(roc_score))
-    print('Test AP score: ' + str(ap_score))
+    
+    with torch.no_grad():
+        # Test loss
+        gae.eval()
+        emb =  emb = gae.get_embeddings(data['features'], data['adj_norm'])
+        accuracy, roc_score, ap_score = eval_gae(test_edges, test_edges_false, emb, adj_orig)
+        print('Test Accuracy: ' + str(accuracy))
+        print('Test ROC score: ' + str(roc_score))
+        print('Test AP score: ' + str(ap_score))
     
     # Plot
     plot_results(results, args.test_freq, path= args.dataset_str + "_GAE_results.png")
@@ -132,7 +137,7 @@ if __name__ == '__main__':
     args.lr          = 0.01
     args.subsampling = False
     args.weight_decay = 0.0
-    args.cuda = True
+    args.use_cuda = False
 
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
