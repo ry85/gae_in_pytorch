@@ -197,15 +197,14 @@ class GVAE_nopyro(nn.Module):
         self.gc2_sig = GraphConvolution(self.n_hidden, self.n_latent)
         self.dropout = dropout
 
-    
     def encode_graph(self, x, adj):
         # First layer shared between mu/sig layers
         x = F.relu(self.gc1(x, adj))
         x = F.dropout(x, self.dropout, training=self.training)
-        mu = self.gc2_mu(x, adj)
-        log_sig = self.gc2_sig(x, adj)
+        self.mu = self.gc2_mu(x, adj)
+        self.log_sig = self.gc2_sig(x, adj)
 
-        self.z = torch.rad
+        self.z = self.mu + torch.randn(self.n_samples ,self.n_hidden) * torch.exp(self.log_sig)
 
     def forward(self, x, adj):
         # First layer shared between mu/sig layers
