@@ -172,3 +172,46 @@ class GAE(nn.Module):
 
         return self.encode_graph(x, adj)
 
+class GVAE_nopyro(nn.Module):
+    """Graph Auto Encoder (see: https://arxiv.org/abs/1611.07308) - Variational Version without the use of pyro"""
+
+    def __init__(self, data, n_hidden, n_latent, dropout):
+        super(GVAE_nopyro, self).__init__()
+
+        # Data
+        self.x = data['features']
+        self.adj_norm = data['adj_norm']
+        self.adj_labels = data['adj_labels']    
+
+        # Dimensions
+        N, D = data['features'].shape
+        self.n_samples = N
+        self.n_edges = self.adj_labels.sum()
+        self.n_subsample = 2 * self.n_edges
+        self.input_dim = D
+        self.n_hidden = n_hidden
+        self.n_latent = n_latent
+
+        self.gc1 = GraphConvolution(self.input_dim, self.n_hidden)
+        self.gc2_mu = GraphConvolution(self.n_hidden, self.n_latent)
+        self.gc2_sig = GraphConvolution(self.n_hidden, self.n_latent)
+        self.dropout = dropout
+
+    
+    def encode_graph(self, x, adj):
+        # First layer shared between mu/sig layers
+        x = F.relu(self.gc1(x, adj))
+        x = F.dropout(x, self.dropout, training=self.training)
+        mu = self.gc2_mu(x, adj)
+        log_sig = self.gc2_sig(x, adj)
+
+        self.z = torch.rad
+
+    def forward(self, x, adj):
+        # First layer shared between mu/sig layers
+        x = F.relu(self.gc1(x, adj))
+        x = F.dropout(x, self.dropout, training=self.training)
+        mu = self.gc2_mu(x, adj)
+        log_sig = self.gc2_sig(x, adj)
+
+        return mu, torch.exp(log_sig)
