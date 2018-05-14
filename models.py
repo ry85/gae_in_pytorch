@@ -4,13 +4,13 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pyro
-import pyro.distributions as dist
-from pyro.util import ng_zeros, ng_ones
+# import pyro
+# import pyro.distributions as dist
+# from pyro.util import ng_zeros, ng_ones
 
 from layers import GraphConvolution
 from utils import get_subsampler
-from dist import weighted_bernoulli
+#from dist import weighted_bernoulli
 
 class GCNEncoder(nn.Module):
     """Encoder using GCN layers"""
@@ -197,6 +197,9 @@ class GVAE_nopyro(nn.Module):
         self.gc2_sig = GraphConvolution(self.n_hidden, self.n_latent)
         self.dropout = dropout
 
+        self.sigmoid = nn.Sigmoid()
+        self.fudge = 1e-7
+
     def encode_graph(self, x, adj):
         # First layer shared between mu/sig layers
         x = F.relu(self.gc1(x, adj))
@@ -206,11 +209,22 @@ class GVAE_nopyro(nn.Module):
 
         self.z = self.mu + torch.randn(self.n_samples ,self.n_hidden) * torch.exp(self.log_sig)
 
-    def forward(self, x, adj):
-        # First layer shared between mu/sig layers
-        x = F.relu(self.gc1(x, adj))
-        x = F.dropout(x, self.dropout, training=self.training)
-        mu = self.gc2_mu(x, adj)
-        log_sig = self.gc2_sig(x, adj)
+        return self.z
 
-        return mu, torch.exp(log_sig)
+    def decode_graph(self, x):
+        # Here the reconstruction is based upon 
+        adj_hat = (self.sigmoid(torch.mm(x, x.t())) + self.fudge) * (1 - 2 * self.fudge)
+
+        return adj_hat
+
+    def get_embeddings(self, x, adj):
+
+        return self.encode_graph(x, adj)
+
+
+    def forward(self, x, adj):
+        # Encode and then decode the graph
+        x_hat = self.encode_graph(x, adj)
+        adj_hat = self.decode_graph(x_hat)
+
+        return adj_hat

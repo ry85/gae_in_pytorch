@@ -77,7 +77,7 @@ def main(args):
         # () * criterion(output, data['adj_labels']))
         # currently no proper weighted cross entropy loss in pytorch
         # https://github.com/pytorch/pytorch/issues/5660
-        logits = F.sigmoid(output)
+        logits = output
         targets = data['adj_labels']
         max_val = (-logits).clamp(min=0)
         log_weight = 1 + (gae.pos_weight - 1.) * targets
