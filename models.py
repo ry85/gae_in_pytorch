@@ -31,7 +31,6 @@ class GCNEncoder(nn.Module):
         log_sig = self.gc2_sig(x, adj)
         return mu, torch.exp(log_sig)
 
-
 class InnerProductDecoder(nn.Module):
     """Decoder for using inner product for prediction."""
 
@@ -47,7 +46,6 @@ class InnerProductDecoder(nn.Module):
         adj = (self.sigmoid(torch.mm(z, z.t())) + self.fudge) * (1 - 2 * self.fudge)
         return adj
     
-
 class GVAE(object):
     """Graph Auto Encoder (see: https://arxiv.org/abs/1611.07308) - Variational Version"""
 
@@ -192,6 +190,10 @@ class GVAE_nopyro(nn.Module):
         self.n_hidden = n_hidden
         self.n_latent = n_latent
 
+        # Parameters
+        self.pos_weight = float(N * N - self.n_edges) / self.n_edges
+        self.norm = float(N * N) / ((N * N - self.n_edges) * 2)
+
         self.gc1 = GraphConvolution(self.input_dim, self.n_hidden)
         self.gc2_mu = GraphConvolution(self.n_hidden, self.n_latent)
         self.gc2_sig = GraphConvolution(self.n_hidden, self.n_latent)
@@ -207,7 +209,7 @@ class GVAE_nopyro(nn.Module):
         self.mu = self.gc2_mu(x, adj)
         self.log_sig = self.gc2_sig(x, adj)
 
-        self.z = self.mu + torch.randn(self.n_samples ,self.n_hidden) * torch.exp(self.log_sig)
+        self.z = self.mu + torch.randn(self.n_samples ,self.n_latent) * torch.exp(self.log_sig)
 
         return self.z
 
@@ -220,7 +222,6 @@ class GVAE_nopyro(nn.Module):
     def get_embeddings(self, x, adj):
 
         return self.encode_graph(x, adj)
-
 
     def forward(self, x, adj):
         # Encode and then decode the graph
