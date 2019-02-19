@@ -10,10 +10,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.autograd import Variable
 
 from utils import load_data, dotdict, eval_gae, make_sparse, plot_results
-from models import GVAE_nopyro
+from models import GVAE
 from preprocessing import mask_test_edges, preprocess_graph
 
 def main(args):
@@ -34,9 +33,9 @@ def main(args):
 
     # Some preprocessing
     adj_train_norm   = preprocess_graph(adj_train)
-    adj_train_norm   = Variable(make_sparse(adj_train_norm))
-    adj_train_labels = Variable(torch.FloatTensor(adj_train + sp.eye(adj_train.shape[0]).todense()))
-    features         = Variable(make_sparse(features))
+    adj_train_norm   = make_sparse(adj_train_norm)
+    adj_train_labels = torch.FloatTensor(adj_train + sp.eye(adj_train.shape[0]).todense())
+    features         = make_sparse(features)
 
     n_edges = adj_train_labels.sum()
     
@@ -46,7 +45,7 @@ def main(args):
         'features'  : features,
     }
 
-    gae = GVAE_nopyro(data,
+    gae = GVAE(data,
               n_hidden=32,
               n_latent=16,
               dropout=args.dropout)
@@ -73,15 +72,11 @@ def main(args):
         output = gae(data['features'], data['adj_norm'])
 
         # Compute the loss ------------------------------------------
-        # https://github.com/pytorch/pytorch/issues/5660
 
         # Compute the weighted_cross_entropy_with_logits ------------
         logits = output
         targets = data['adj_labels']
-        max_val = (-logits).clamp(min=0)
-        log_weight = 1 + (gae.pos_weight - 1.) * targets
-        cost = (1 - targets) * logits + log_weight * ((-logits.abs()).exp().log1p() + max_val)
-        cost = gae.norm * torch.mean(cost)
+        cost = gae.norm * F.binary_cross_entropy_with_logits(logits, targets, pos_weight=gae.pos_weight)
 
         # compute the latent loss -----------------------------------
         log_lik = cost

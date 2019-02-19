@@ -1,20 +1,16 @@
-from __future__ import division
-from __future__ import print_function
+import time
 from collections import defaultdict
 
 import numpy as np
 import scipy.sparse as sp
-import time
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.autograd import Variable
 
-from utils import load_data, dotdict, eval_gae, make_sparse, plot_results
 from models import GAE
 from preprocessing import mask_test_edges, preprocess_graph
+from utils import dotdict, eval_gae, load_data, make_sparse, plot_results
 
 def main(args):
     """ Train GAE """ 
@@ -34,9 +30,9 @@ def main(args):
 
     # Some preprocessing
     adj_train_norm   = preprocess_graph(adj_train)
-    adj_train_norm   = Variable(make_sparse(adj_train_norm))
-    adj_train_labels = Variable(torch.FloatTensor(adj_train + sp.eye(adj_train.shape[0]).todense()))
-    features         = Variable(make_sparse(features))
+    adj_train_norm   = make_sparse(adj_train_norm)
+    adj_train_labels = torch.FloatTensor(adj_train + sp.eye(adj_train.shape[0]).todense())
+    features         = make_sparse(features)
 
     n_edges = adj_train_labels.sum()
     
@@ -73,17 +69,10 @@ def main(args):
         output = gae(data['features'], data['adj_norm'])
 
         # Compute the loss 
-        #loss = gae.norm.cuda() * torch.mean(gae.pos_weight.
-        # () * criterion(output, data['adj_labels']))
-        # currently no proper weighted cross entropy loss in pytorch
-        # https://github.com/pytorch/pytorch/issues/5660
         logits = output
         targets = data['adj_labels']
-        max_val = (-logits).clamp(min=0)
-        log_weight = 1 + (gae.pos_weight - 1.) * targets
-        loss = (1 - targets) * logits + log_weight * ((-logits.abs()).exp().log1p() + max_val)
-        loss = gae.norm * torch.mean(loss)
-        
+        loss = gae.norm * F.binary_cross_entropy_with_logits(logits, targets, pos_weight=gae.pos_weight)
+
         loss.backward()
         optimizer.step()
 
